@@ -55,28 +55,32 @@ pipeline {
       }
     }
 
-    stage('Update Deployment File') {
+        stage('Update Deployment File') {
       environment {
         GIT_REPO_NAME = "devops-project"
         GIT_USER_NAME = "heyapurv"
+        GIT_BRANCH    = "main"
       }
       steps {
-        dir("${WORKSPACE}") {   // 👈 ensure inside repo
-          withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-            sh '''
-              git config user.email "deskofapurv@gmail.com"
-              git config user.name "heyapurv"
+        withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
+          sh '''
+            rm -rf repo
+            git clone https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git repo
+            cd repo
 
-              sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" \
-                java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+            git config user.email "deskofapurv@gmail.com"
+            git config user.name "heyapurv"
 
-              git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-              git commit -m "Update deployment image to version ${BUILD_NUMBER}" || echo "No changes to commit"
-              git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
-            '''
-          }
+            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" \
+              java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+
+            git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+            git commit -m "Update deployment image to version ${BUILD_NUMBER}" || echo "No changes to commit"
+            git push origin ${GIT_BRANCH}
+          '''
         }
       }
     }
+
   }
 }
