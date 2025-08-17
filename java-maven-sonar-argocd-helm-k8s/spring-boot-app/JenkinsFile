@@ -2,7 +2,7 @@ pipeline {
   agent {
     docker {
       // Use a Docker image with Maven and JDK pre-installed
-      image 'askibidichat/ultimate-jenkins:latest'
+      image 'jelastic/maven:3.9.5-openjdk-21'
       args '--user root -v /var/run/docker.sock:/var/run/docker.sock' // mount Docker socket to access the host's Docker daemon
     }
   }
