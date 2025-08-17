@@ -9,15 +9,22 @@ pipeline {
   stages {
     stage('Checkout') {
       steps {
-        checkout scm   // ✅ ensures .git is available in $WORKSPACE
+        checkout([
+          $class: 'GitSCM',
+          branches: [[name: "*/main"]],
+          doGenerateSubmoduleConfigurations: false,
+          extensions: [[$class: 'CloneOption', noTags: false, shallow: false, depth: 0]],
+          userRemoteConfigs: [[
+            url: 'https://github.com/heyapurv/devops-project.git',
+            credentialsId: 'github'
+          ]]
+        ])
       }
     }
 
     stage('Build and Test') {
       steps {
-        dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
-          sh 'mvn clean package'
-        }
+        sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
       }
     }
 
@@ -27,13 +34,10 @@ pipeline {
       }
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-          dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
-            sh '''
-              mvn sonar:sonar \
-                -Dsonar.login=$SONAR_AUTH_TOKEN \
-                -Dsonar.host.url=${SONAR_URL}
-            '''
-          }
+          sh '''
+            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && \
+            mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}
+          '''
         }
       }
     }
@@ -43,10 +47,8 @@ pipeline {
         DOCKER_IMAGE = "heyapurv/ultimate-cicd:${BUILD_NUMBER}"
       }
       steps {
-        dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
-          sh 'docker build -t ${DOCKER_IMAGE} .'
-        }
         script {
+          sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && docker build -t ${DOCKER_IMAGE} .'
           def dockerImage = docker.image("${DOCKER_IMAGE}")
           docker.withRegistry('https://index.docker.io/v1/', 'docker-cred') {
             dockerImage.push()
@@ -62,19 +64,17 @@ pipeline {
       }
       steps {
         withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-          dir("${WORKSPACE}") {
-            sh '''
-              git config user.email "deskofapurv@gmail.com"
-              git config user.name "heyapurv"
+          sh '''
+            git config user.email "deskofapurv@gmail.com"
+            git config user.name "heyapurv"
 
-              sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" \
-                java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" \
+              java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
 
-              git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-              git commit -m "Update deployment image to version ${BUILD_NUMBER}" || echo "No changes to commit"
-              git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
-            '''
-          }
+            git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+            git commit -m "Update deployment image to version ${BUILD_NUMBER}" || echo "No changes to commit"
+            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
+          '''
         }
       }
     }
